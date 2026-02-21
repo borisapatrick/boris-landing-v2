@@ -231,12 +231,14 @@
     html += '    <div style="margin-top: 6px;"><span class="appointment-status ' + statusClass + '">' + escapeHtml(status) + '</span></div>';
     html += '  </div>';
 
-    // Action buttons (only for pending appointments)
+    // Action buttons
     html += '  <div class="appt-actions" id="appt-actions-' + escapeHtml(id) + '">';
     if (status === 'pending') {
       html += '    <button class="btn-approve" onclick="showApprovalForm(\'' + escapeHtml(id) + '\')">Approve</button>';
       html += '    <button class="btn-deny" onclick="denyAppointment(\'' + escapeHtml(id) + '\')">Deny</button>';
     }
+    html += '    <button class="btn-edit" onclick="showEditForm(\'' + escapeHtml(id) + '\')">Edit</button>';
+    html += '    <button class="btn-delete" onclick="deleteAppointment(\'' + escapeHtml(id) + '\')">Delete</button>';
     html += '  </div>';
 
     html += '</div>';
@@ -673,10 +675,11 @@
       }
     }
 
-    // Remove action buttons
+    // Replace action buttons — remove approve/deny, keep edit and delete
     var actionsContainer = document.getElementById('appt-actions-' + appointmentId);
     if (actionsContainer) {
-      actionsContainer.innerHTML = '';
+      actionsContainer.innerHTML = '<button class="btn-edit" onclick="showEditForm(\'' + escapeHtml(appointmentId) + '\')">Edit</button>'
+        + '<button class="btn-delete" onclick="deleteAppointment(\'' + escapeHtml(appointmentId) + '\')">Delete</button>';
     }
 
     // If current filter doesn't match new status, re-render
@@ -684,6 +687,248 @@
       renderAppointments();
     }
   }
+
+  // --- Delete Appointment ---
+  window.deleteAppointment = function(appointmentId) {
+    if (!confirm('Are you sure you want to delete this appointment? This cannot be undone.')) {
+      return;
+    }
+    db.collection('appointments').doc(appointmentId).delete().then(function() {
+      // Remove from local array
+      for (var i = 0; i < allAppointments.length; i++) {
+        if (allAppointments[i]._id === appointmentId) {
+          allAppointments.splice(i, 1);
+          break;
+        }
+      }
+      updateStats();
+      renderAppointments();
+    }).catch(function(error) {
+      console.error('Error deleting appointment:', error);
+      alert('Error deleting appointment. Please try again.');
+    });
+  };
+
+  // --- Show Inline Edit Form ---
+  window.showEditForm = function(appointmentId) {
+    var appointment = null;
+    for (var i = 0; i < allAppointments.length; i++) {
+      if (allAppointments[i]._id === appointmentId) {
+        appointment = allAppointments[i];
+        break;
+      }
+    }
+    if (!appointment) return;
+
+    var card = document.getElementById('appt-' + appointmentId);
+    if (!card) return;
+
+    // Remove any existing edit or approval form on this card
+    var existingEdit = card.querySelector('.edit-form');
+    if (existingEdit) existingEdit.remove();
+    var existingApproval = card.querySelector('.approval-form');
+    if (existingApproval) existingApproval.remove();
+
+    var eid = escapeHtml(appointmentId);
+    var statusOptions = '<option value="pending"' + ((appointment.status || 'pending') === 'pending' ? ' selected' : '') + '>pending</option>'
+      + '<option value="approved"' + (appointment.status === 'approved' ? ' selected' : '') + '>approved</option>'
+      + '<option value="denied"' + (appointment.status === 'denied' ? ' selected' : '') + '>denied</option>';
+
+    var formHtml = '<div class="approval-form-title">Edit Appointment</div>'
+      + '<div class="approval-form-row">'
+      + '  <div class="approval-form-field"><label for="edit-name-' + eid + '">Customer Name</label>'
+      + '    <input type="text" id="edit-name-' + eid + '" value="' + escapeHtml(appointment.userName || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-email-' + eid + '">Email</label>'
+      + '    <input type="email" id="edit-email-' + eid + '" value="' + escapeHtml(appointment.userEmail || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-phone-' + eid + '">Phone</label>'
+      + '    <input type="tel" id="edit-phone-' + eid + '" value="' + escapeHtml(appointment.userPhone || '') + '"></div>'
+      + '</div>'
+      + '<div class="approval-form-row">'
+      + '  <div class="approval-form-field"><label for="edit-year-' + eid + '">Year</label>'
+      + '    <input type="text" id="edit-year-' + eid + '" value="' + escapeHtml(appointment.vehicleYear || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-make-' + eid + '">Make</label>'
+      + '    <input type="text" id="edit-make-' + eid + '" value="' + escapeHtml(appointment.vehicleMake || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-model-' + eid + '">Model</label>'
+      + '    <input type="text" id="edit-model-' + eid + '" value="' + escapeHtml(appointment.vehicleModel || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-plate-' + eid + '">Plate</label>'
+      + '    <input type="text" id="edit-plate-' + eid + '" value="' + escapeHtml(appointment.licensePlate || '') + '"></div>'
+      + '</div>'
+      + '<div class="approval-form-row">'
+      + '  <div class="approval-form-field"><label for="edit-prefdate-' + eid + '">Preferred Date</label>'
+      + '    <input type="text" id="edit-prefdate-' + eid + '" value="' + escapeHtml(appointment.preferredDate || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-status-' + eid + '">Status</label>'
+      + '    <select id="edit-status-' + eid + '">' + statusOptions + '</select></div>'
+      + '  <div class="approval-form-field"><label for="edit-dropoff-date-' + eid + '">Drop-off Date</label>'
+      + '    <input type="text" id="edit-dropoff-date-' + eid + '" value="' + escapeHtml(appointment.dropoffDate || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-dropoff-time-' + eid + '">Drop-off Time</label>'
+      + '    <input type="text" id="edit-dropoff-time-' + eid + '" value="' + escapeHtml(appointment.dropoffTime || '') + '"></div>'
+      + '</div>'
+      + '<div class="approval-form-row">'
+      + '  <div class="approval-form-field" style="flex:1;"><label for="edit-message-' + eid + '">Message</label>'
+      + '    <textarea id="edit-message-' + eid + '" rows="2" style="padding:7px 10px;border:1px solid #CCC;border-radius:4px;font-family:\'Open Sans\',sans-serif;font-size:0.85rem;color:#333;background:var(--white);width:100%;box-sizing:border-box;resize:vertical;">' + escapeHtml(appointment.message || '') + '</textarea></div>'
+      + '</div>'
+      + '<div class="approval-form-actions">'
+      + '  <button class="btn-confirm-approve" onclick="saveEdit(\'' + eid + '\')">Save Changes</button>'
+      + '  <button class="approval-form-cancel" onclick="cancelEditForm(\'' + eid + '\')">Cancel</button>'
+      + '</div>';
+
+    var formEl = document.createElement('div');
+    formEl.className = 'edit-form';
+    formEl.innerHTML = formHtml;
+    card.appendChild(formEl);
+  };
+
+  // --- Cancel Edit Form ---
+  window.cancelEditForm = function(appointmentId) {
+    var card = document.getElementById('appt-' + appointmentId);
+    if (!card) return;
+    var form = card.querySelector('.edit-form');
+    if (form) form.remove();
+  };
+
+  // --- Save Edit ---
+  window.saveEdit = function(appointmentId) {
+    var data = {
+      userName: document.getElementById('edit-name-' + appointmentId).value.trim(),
+      userEmail: document.getElementById('edit-email-' + appointmentId).value.trim(),
+      userPhone: document.getElementById('edit-phone-' + appointmentId).value.trim(),
+      vehicleYear: document.getElementById('edit-year-' + appointmentId).value.trim(),
+      vehicleMake: document.getElementById('edit-make-' + appointmentId).value.trim(),
+      vehicleModel: document.getElementById('edit-model-' + appointmentId).value.trim(),
+      licensePlate: document.getElementById('edit-plate-' + appointmentId).value.trim(),
+      preferredDate: document.getElementById('edit-prefdate-' + appointmentId).value.trim(),
+      status: document.getElementById('edit-status-' + appointmentId).value,
+      dropoffDate: document.getElementById('edit-dropoff-date-' + appointmentId).value.trim(),
+      dropoffTime: document.getElementById('edit-dropoff-time-' + appointmentId).value.trim(),
+      message: document.getElementById('edit-message-' + appointmentId).value.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    db.collection('appointments').doc(appointmentId).update(data).then(function() {
+      // Update local array
+      for (var i = 0; i < allAppointments.length; i++) {
+        if (allAppointments[i]._id === appointmentId) {
+          for (var key in data) {
+            if (key !== 'updatedAt') {
+              allAppointments[i][key] = data[key];
+            }
+          }
+          break;
+        }
+      }
+      updateStats();
+      renderAppointments();
+    }).catch(function(error) {
+      console.error('Error saving edit:', error);
+      alert('Error saving changes. Please try again.');
+    });
+  };
+
+  // --- Show Add Appointment Form ---
+  window.showAddAppointmentForm = function() {
+    var container = document.getElementById('appointments-list');
+    if (!container) return;
+
+    // Remove existing add form if present
+    var existing = document.getElementById('new-appointment-form');
+    if (existing) existing.remove();
+
+    var formHtml = '<div class="admin-appt-card" id="new-appointment-form">'
+      + '<div class="edit-form" style="width:100%;">'
+      + '  <div class="approval-form-title">New Appointment</div>'
+      + '  <div class="approval-form-row">'
+      + '    <div class="approval-form-field"><label for="new-name">Customer Name *</label>'
+      + '      <input type="text" id="new-name" placeholder="Full name"></div>'
+      + '    <div class="approval-form-field"><label for="new-email">Email</label>'
+      + '      <input type="email" id="new-email" placeholder="email@example.com"></div>'
+      + '    <div class="approval-form-field"><label for="new-phone">Phone</label>'
+      + '      <input type="tel" id="new-phone" placeholder="231-555-1234"></div>'
+      + '  </div>'
+      + '  <div class="approval-form-row">'
+      + '    <div class="approval-form-field"><label for="new-year">Year *</label>'
+      + '      <input type="text" id="new-year" placeholder="2024"></div>'
+      + '    <div class="approval-form-field"><label for="new-make">Make *</label>'
+      + '      <input type="text" id="new-make" placeholder="Ford"></div>'
+      + '    <div class="approval-form-field"><label for="new-model">Model *</label>'
+      + '      <input type="text" id="new-model" placeholder="F-150"></div>'
+      + '    <div class="approval-form-field"><label for="new-plate">Plate</label>'
+      + '      <input type="text" id="new-plate" placeholder="ABC1234"></div>'
+      + '  </div>'
+      + '  <div class="approval-form-row">'
+      + '    <div class="approval-form-field"><label for="new-prefdate">Preferred Date</label>'
+      + '      <input type="text" id="new-prefdate" placeholder="e.g. March 5, 2026"></div>'
+      + '    <div class="approval-form-field"><label for="new-status">Status</label>'
+      + '      <select id="new-status">'
+      + '        <option value="pending" selected>pending</option>'
+      + '        <option value="approved">approved</option>'
+      + '        <option value="denied">denied</option>'
+      + '      </select></div>'
+      + '  </div>'
+      + '  <div class="approval-form-row">'
+      + '    <div class="approval-form-field" style="flex:1;"><label for="new-message">Message</label>'
+      + '      <textarea id="new-message" rows="2" style="padding:7px 10px;border:1px solid #CCC;border-radius:4px;font-family:\'Open Sans\',sans-serif;font-size:0.85rem;color:#333;background:var(--white);width:100%;box-sizing:border-box;resize:vertical;" placeholder="Notes about the appointment"></textarea></div>'
+      + '  </div>'
+      + '  <div class="approval-form-actions">'
+      + '    <button class="btn-confirm-approve" onclick="submitNewAppointment()">Create Appointment</button>'
+      + '    <button class="approval-form-cancel" onclick="cancelAddAppointmentForm()">Cancel</button>'
+      + '  </div>'
+      + '</div>'
+      + '</div>';
+
+    container.insertAdjacentHTML('afterbegin', formHtml);
+  };
+
+  // --- Cancel Add Appointment Form ---
+  window.cancelAddAppointmentForm = function() {
+    var form = document.getElementById('new-appointment-form');
+    if (form) form.remove();
+  };
+
+  // --- Submit New Appointment ---
+  window.submitNewAppointment = function() {
+    var name = document.getElementById('new-name').value.trim();
+    var year = document.getElementById('new-year').value.trim();
+    var make = document.getElementById('new-make').value.trim();
+    var model = document.getElementById('new-model').value.trim();
+
+    if (!name || !year || !make || !model) {
+      alert('Please fill in the required fields: Customer Name, Year, Make, and Model.');
+      return;
+    }
+
+    var data = {
+      userName: name,
+      userEmail: document.getElementById('new-email').value.trim(),
+      userPhone: document.getElementById('new-phone').value.trim(),
+      vehicleYear: year,
+      vehicleMake: make,
+      vehicleModel: model,
+      licensePlate: document.getElementById('new-plate').value.trim(),
+      preferredDate: document.getElementById('new-prefdate').value.trim(),
+      status: document.getElementById('new-status').value,
+      message: document.getElementById('new-message').value.trim(),
+      userId: '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    db.collection('appointments').add(data).then(function(docRef) {
+      // Add to local array with the new ID
+      var localCopy = {};
+      for (var key in data) {
+        if (key !== 'createdAt') {
+          localCopy[key] = data[key];
+        }
+      }
+      localCopy._id = docRef.id;
+      localCopy.createdAt = new Date();
+      allAppointments.unshift(localCopy);
+      updateStats();
+      renderAppointments();
+    }).catch(function(error) {
+      console.error('Error creating appointment:', error);
+      alert('Error creating appointment. Please try again.');
+    });
+  };
 
   // --- Filter Tabs ---
   function initFilterTabs() {

@@ -69,8 +69,13 @@
 
       // If on login page and already logged in, redirect to dashboard
       // But skip if a signup/login action is in progress (let the action handle its own redirect)
-      if (user && isLoginPage() && !window._authActionInProgress) {
-        window.location.href = 'dashboard.html';
+      if (user && isLoginPage()) {
+        if (window._authActionInProgress) {
+          console.log('[AuthState] On login page, user signed in, but _authActionInProgress is true — skipping redirect (sign-in handler will redirect).');
+        } else {
+          console.log('[AuthState] On login page, user signed in, no action in progress — redirecting to dashboard.');
+          window.location.href = 'dashboard.html';
+        }
         return;
       }
 
@@ -243,36 +248,90 @@
   };
 
   // --- Google Sign-In ---
+  // Helper: create the Firestore user doc, with one automatic retry on failure.
+  // Returns a promise that resolves when the doc is written (or rejects after retry).
+  function createUserDoc(uid, userData) {
+    console.log('[Google Sign-In] Writing user doc for UID:', uid);
+    return db.collection('users').doc(uid).set(userData)
+      .then(function() {
+        console.log('[Google Sign-In] Firestore doc created successfully.');
+      })
+      .catch(function(err) {
+        console.error('[Google Sign-In] .set() failed:', err.code, err.message, err);
+        console.log('[Google Sign-In] Retrying .set() after 1 s...');
+        return new Promise(function(resolve) { setTimeout(resolve, 1000); })
+          .then(function() {
+            return db.collection('users').doc(uid).set(userData);
+          })
+          .then(function() {
+            console.log('[Google Sign-In] Firestore doc created on retry.');
+          });
+        // If the retry also fails the error propagates to the caller
+      });
+  }
+
   window.signInWithGoogle = function() {
     window._authActionInProgress = true;
     var provider = new firebase.auth.GoogleAuthProvider();
 
+    console.log('[Google Sign-In] Starting signInWithPopup...');
+
     auth.signInWithPopup(provider)
       .then(function(result) {
         var user = result.user;
-        var isNewUser = result.additionalUserInfo && result.additionalUserInfo.isNewUser;
+        console.log('[Google Sign-In] Popup succeeded. UID:', user.uid, 'Email:', user.email);
 
-        if (isNewUser) {
-          // Save new Google user's profile to Firestore
-          return db.collection('users').doc(user.uid).set({
-            name: user.displayName || '',
-            email: user.email || '',
-            phone: '',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).then(function() {
+        // Force-refresh the ID token so that Firestore security rules see a
+        // valid request.auth immediately. Without this, the very first
+        // Firestore write after a brand-new Google sign-in can fail with a
+        // "Missing or insufficient permissions" error because the Firestore
+        // client has not yet picked up the new auth credential.
+        console.log('[Google Sign-In] Refreshing ID token...');
+        return user.getIdToken(true).then(function() {
+          console.log('[Google Sign-In] Token refreshed. Checking Firestore doc...');
+
+          // additionalUserInfo.isNewUser is unreliable (deprecated by Google/Firebase
+          // as of Sept 2023 and may always return false). Instead, check whether the
+          // Firestore users document already exists to decide if this is a new user.
+          return db.collection('users').doc(user.uid).get();
+        }).then(function(doc) {
+          console.log('[Google Sign-In] Doc exists?', doc.exists);
+
+          if (!doc.exists) {
+            // New user — create their Firestore profile
+            var smsConsent = !!window._signupConsent;
+            var userData = {
+              name: user.displayName || '',
+              email: user.email || '',
+              phone: '',
+              smsConsent: smsConsent,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            console.log('[Google Sign-In] New user detected. Creating doc...');
+            return createUserDoc(user.uid, userData).then(function() {
+              console.log('[Google Sign-In] Doc write complete. Redirecting...');
+              window._authActionInProgress = false;
+              window.location.href = 'dashboard.html';
+            }).catch(function(writeErr) {
+              // Both attempts failed — still redirect so user is not stuck
+              console.error('[Google Sign-In] Could not create user doc after retry:', writeErr);
+              window._authActionInProgress = false;
+              if (typeof showMessage === 'function') {
+                showMessage('Account created but profile save failed. Please update your profile on the dashboard.', true);
+              }
+              setTimeout(function() { window.location.href = 'dashboard.html'; }, 2000);
+            });
+          } else {
+            // Existing user — just redirect
+            console.log('[Google Sign-In] Existing user. Redirecting...');
             window._authActionInProgress = false;
             window.location.href = 'dashboard.html';
-          });
-        } else {
-          // Existing user — just redirect
-          window._authActionInProgress = false;
-          window.location.href = 'dashboard.html';
-        }
+          }
+        });
       })
       .catch(function(error) {
         window._authActionInProgress = false;
-        console.error('Google sign-in error:', error.code, error.message);
-        // Display error on login page if showMessage exists
+        console.error('[Google Sign-In] Error:', error.code, error.message, error);
         if (typeof showMessage === 'function') {
           showMessage(
             typeof getFirebaseErrorMessage === 'function'
@@ -310,6 +369,18 @@
         }
         if (phoneField && !phoneField.value && data.phone) {
           phoneField.value = data.phone;
+        }
+
+        // Hide consent checkbox if user already consented
+        if (data.smsConsent === true) {
+          var consentCheckbox = document.getElementById('sms-consent');
+          var consentGroup = consentCheckbox ? consentCheckbox.closest('.consent-group') : null;
+          if (consentGroup) {
+            consentGroup.style.display = 'none';
+          }
+          if (consentCheckbox) {
+            consentCheckbox.checked = true;
+          }
         }
 
         // Pre-fill with first saved vehicle if available

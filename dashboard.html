@@ -150,6 +150,12 @@
                       <input type="email" id="profileEmail" disabled>
                     </div>
                   </div>
+                  <div class="form-group profile-checkbox-group">
+                    <label class="checkbox-label" for="profileSmsConsent">
+                      <input type="checkbox" id="profileSmsConsent" disabled>
+                      <span>Opt out of communications (SMS &amp; email)</span>
+                    </label>
+                  </div>
                   <div class="profile-actions" id="profileActions" style="display: none;">
                     <button type="submit" class="btn btn-primary" id="profileSaveBtn">SAVE CHANGES</button>
                     <button type="button" class="btn btn-outline" onclick="cancelProfileEdit()">CANCEL</button>
@@ -207,6 +213,7 @@
           document.getElementById('profilePhone').value = currentUserData.phone || '';
           document.getElementById('profilePhone').placeholder = currentUserData.phone ? '' : 'Not set — click Edit to add';
           document.getElementById('profileEmail').value = currentUserData.email || user.email;
+          document.getElementById('profileSmsConsent').checked = !currentUserData.smsConsent;
         } else {
           document.getElementById('welcomeName').textContent = 'Welcome!';
           document.getElementById('profileEmail').value = user.email;
@@ -401,6 +408,7 @@
     function enableProfileEdit() {
       document.getElementById('profileName').disabled = false;
       document.getElementById('profilePhone').disabled = false;
+      document.getElementById('profileSmsConsent').disabled = false;
       // Email cannot be changed easily through Firestore, keep disabled
       document.getElementById('profileActions').style.display = 'flex';
       document.getElementById('editProfileBtn').style.display = 'none';
@@ -408,7 +416,8 @@
       // Save original values for cancel
       profileOriginalData = {
         name: document.getElementById('profileName').value,
-        phone: document.getElementById('profilePhone').value
+        phone: document.getElementById('profilePhone').value,
+        smsConsent: document.getElementById('profileSmsConsent').checked
       };
 
       document.getElementById('profileName').focus();
@@ -417,8 +426,10 @@
     function cancelProfileEdit() {
       document.getElementById('profileName').value = profileOriginalData.name || '';
       document.getElementById('profilePhone').value = profileOriginalData.phone || '';
+      document.getElementById('profileSmsConsent').checked = !!profileOriginalData.smsConsent;
       document.getElementById('profileName').disabled = true;
       document.getElementById('profilePhone').disabled = true;
+      document.getElementById('profileSmsConsent').disabled = true;
       document.getElementById('profileActions').style.display = 'none';
       document.getElementById('editProfileBtn').style.display = 'inline-flex';
       hideProfileMessage();
@@ -431,6 +442,7 @@
 
       var name = document.getElementById('profileName').value.trim();
       var phone = document.getElementById('profilePhone').value.trim();
+      var smsConsent = !document.getElementById('profileSmsConsent').checked;
       var btn = document.getElementById('profileSaveBtn');
 
       if (!name) {
@@ -444,7 +456,8 @@
       // Update Firestore
       db.collection('users').doc(user.uid).update({
         name: name,
-        phone: phone
+        phone: phone,
+        smsConsent: smsConsent
       }).then(function() {
         // Update display name
         return user.updateProfile({ displayName: name });
@@ -455,6 +468,7 @@
         // Disable fields
         document.getElementById('profileName').disabled = true;
         document.getElementById('profilePhone').disabled = true;
+        document.getElementById('profileSmsConsent').disabled = true;
         document.getElementById('profileActions').style.display = 'none';
         document.getElementById('editProfileBtn').style.display = 'inline-flex';
       }).catch(function(error) {

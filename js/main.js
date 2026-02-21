@@ -47,6 +47,8 @@ if (contactForm) {
     document.querySelectorAll('.form-group input, .form-group textarea').forEach(function(el) {
       el.style.borderColor = '#DDD';
     });
+    var prevConsentError = document.querySelector('.consent-error');
+    if (prevConsentError) prevConsentError.remove();
 
     // Validate name
     if (!name.value.trim()) {
@@ -60,6 +62,26 @@ if (contactForm) {
     if (phoneDigits.length < 7) {
       phone.style.borderColor = '#CC1A1A';
       phone.focus();
+      return;
+    }
+
+    // Validate communications consent checkbox
+    var smsConsent = document.getElementById('sms-consent');
+    if (smsConsent && !smsConsent.checked) {
+      // Remove any previous consent error message
+      var existingError = document.querySelector('.consent-error');
+      if (existingError) existingError.remove();
+      // Show error message below the consent group
+      var consentGroup = smsConsent.closest('.form-group');
+      var errorMsg = document.createElement('span');
+      errorMsg.className = 'consent-error';
+      errorMsg.style.color = '#CC1A1A';
+      errorMsg.style.fontSize = '0.85rem';
+      errorMsg.style.display = 'block';
+      errorMsg.style.marginTop = '4px';
+      errorMsg.textContent = 'Please agree to receive communications to continue.';
+      consentGroup.appendChild(errorMsg);
+      smsConsent.focus();
       return;
     }
 

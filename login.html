@@ -57,7 +57,7 @@
           <div class="auth-message" id="authMessage"></div>
 
           <!-- Google Sign-In Button (shared across tabs) -->
-          <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <button type="button" class="btn-google" onclick="handleGoogleSignIn()">
             <svg class="google-logo" viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#FFFFFF"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#FFFFFF"/>
@@ -112,8 +112,8 @@
             </div>
             <div class="form-group consent-group">
               <label class="consent-label">
-                <input type="checkbox" id="signupSmsConsent" name="sms_consent" value="yes">
-                <span>I agree to receive communications from Boris Enterprises. <a href="#" class="consent-details-link" onclick="event.preventDefault(); document.getElementById('signupConsentModal').style.display='flex';">Details</a></span>
+                <input type="checkbox" id="signupSmsConsent" name="sms_consent" value="yes" required>
+                <span>I agree to receive communications from Boris Enterprises.<span class="required-star">*</span> <a href="#" class="consent-details-link" onclick="event.preventDefault(); document.getElementById('signupConsentModal').style.display='flex';">Details</a></span>
               </label>
             </div>
             <button type="submit" class="btn btn-primary btn-full" id="signupBtn">CREATE ACCOUNT</button>
@@ -225,6 +225,26 @@
       showLoginForm();
     }
 
+    function handleGoogleSignIn() {
+      clearMessage();
+      var isSignupTab = document.getElementById('signupTab').classList.contains('active');
+
+      if (isSignupTab) {
+        var consent = document.getElementById('signupSmsConsent');
+        if (!consent || !consent.checked) {
+          showMessage('Please agree to receive communications to sign up.', true);
+          return;
+        }
+        // Set global flag so auth.js can read it for new Google users
+        window._signupConsent = true;
+      } else {
+        // Login tab — no consent needed, clear any stale flag
+        window._signupConsent = false;
+      }
+
+      signInWithGoogle();
+    }
+
     function getFirebaseErrorMessage(code) {
       switch (code) {
         case 'auth/email-already-in-use':
@@ -319,6 +339,11 @@
       }
 
       var smsConsent = document.getElementById('signupSmsConsent').checked;
+
+      if (!smsConsent) {
+        showMessage('Please agree to receive communications to create an account.', true);
+        return;
+      }
 
       setButtonLoading(btn, true);
 

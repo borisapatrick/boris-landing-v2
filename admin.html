@@ -628,6 +628,137 @@
         padding: 16px 12px;
       }
     }
+
+    /* Edit Button */
+    .btn-edit {
+      padding: 8px 16px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      background: #1565C0;
+      color: var(--white);
+    }
+
+    .btn-edit:hover {
+      background: #0D47A1;
+      transform: translateY(-1px);
+    }
+
+    /* Delete Button */
+    .btn-delete {
+      padding: 8px 16px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      background: #757575;
+      color: var(--white);
+    }
+
+    .btn-delete:hover {
+      background: #C62828;
+      transform: translateY(-1px);
+    }
+
+    /* Add Appointment Button */
+    .btn-add-appointment {
+      padding: 8px 18px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      background: var(--red);
+      color: var(--white);
+      margin-left: 16px;
+      vertical-align: middle;
+    }
+
+    .btn-add-appointment:hover {
+      background: var(--dark-red, #8E0000);
+      transform: translateY(-1px);
+    }
+
+    /* Inline Edit Form */
+    .edit-form {
+      background: #E3F2FD;
+      border: 1px solid #90CAF9;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-top: 10px;
+    }
+
+    .edit-form label {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #777;
+    }
+
+    .edit-form input,
+    .edit-form select,
+    .edit-form textarea {
+      padding: 7px 10px;
+      border: 1px solid #CCC;
+      border-radius: 4px;
+      font-family: 'Open Sans', sans-serif;
+      font-size: 0.85rem;
+      color: #333;
+      background: var(--white);
+    }
+
+    .edit-form input:focus,
+    .edit-form select:focus,
+    .edit-form textarea:focus {
+      outline: none;
+      border-color: #1565C0;
+      box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
+    }
+
+    .edit-form select {
+      appearance: auto;
+      cursor: pointer;
+    }
+
+    /* Mobile responsive for edit form */
+    @media (max-width: 768px) {
+      .edit-form .approval-form-row {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .edit-form .approval-form-field {
+        width: 100%;
+      }
+
+      .edit-form .approval-form-field input,
+      .edit-form .approval-form-field select,
+      .edit-form .approval-form-field textarea {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .btn-add-appointment {
+        margin-left: 0;
+        margin-top: 8px;
+        display: block;
+        width: 100%;
+        text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
@@ -718,7 +849,8 @@
         <div class="container">
 
           <div class="admin-panel">
-            <h2>APPOINTMENTS</h2>
+            <h2 style="display:inline-block;vertical-align:middle;">APPOINTMENTS</h2>
+            <button class="btn-add-appointment" onclick="showAddAppointmentForm()">+ NEW APPOINTMENT</button>
             <div id="appointments-list">
               <p class="empty-state">Loading appointments...</p>
             </div>
