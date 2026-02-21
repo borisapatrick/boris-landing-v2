@@ -214,6 +214,15 @@
 
     html += '    <div class="appt-date">Preferred Date: ' + escapeHtml(preferredDate) + '</div>';
 
+    // Show drop-off date/time for approved appointments
+    if (status === 'approved' && (appt.dropoffDate || appt.dropoffTime)) {
+      var dropoffStr = 'Drop-off: ' + (appt.dropoffDate || 'N/A');
+      if (appt.dropoffTime) {
+        dropoffStr += ' at ' + appt.dropoffTime;
+      }
+      html += '    <div class="appt-dropoff">' + escapeHtml(dropoffStr) + '</div>';
+    }
+
     if (message) {
       html += '    <div class="appt-message">' + escapeHtml(message) + '</div>';
     }
@@ -225,7 +234,7 @@
     // Action buttons (only for pending appointments)
     html += '  <div class="appt-actions" id="appt-actions-' + escapeHtml(id) + '">';
     if (status === 'pending') {
-      html += '    <button class="btn-approve" onclick="approveAppointment(\'' + escapeHtml(id) + '\')">Approve</button>';
+      html += '    <button class="btn-approve" onclick="showApprovalForm(\'' + escapeHtml(id) + '\')">Approve</button>';
       html += '    <button class="btn-deny" onclick="denyAppointment(\'' + escapeHtml(id) + '\')">Deny</button>';
     }
     html += '  </div>';
@@ -234,17 +243,234 @@
     return html;
   }
 
+  // --- Show SMS Banner on Appointment Card ---
+  // Displays a dismissible banner with the customer's phone and a pre-written
+  // SMS message that can be copied to clipboard for pasting into Google Voice.
+  function showSmsBanner(appointmentId, appointment, action) {
+    var card = document.getElementById('appt-' + appointmentId);
+    if (!card) return;
+
+    // Remove any existing banner on this card first
+    var existing = card.querySelector('.sms-banner');
+    if (existing) existing.remove();
+
+    var phone = appointment.userPhone || '';
+    var vehicle = ((appointment.vehicleYear || '') + ' ' + (appointment.vehicleMake || '') + ' ' + (appointment.vehicleModel || '')).trim();
+
+    var smsText = '';
+    if (action === 'approved') {
+      var dropoffInfo = '';
+      if (appointment.dropoffDate) {
+        dropoffInfo = ' Please drop off your vehicle on ' + appointment.dropoffDate;
+        if (appointment.dropoffTime) {
+          dropoffInfo += ' at ' + appointment.dropoffTime;
+        }
+        dropoffInfo += '.';
+      } else {
+        dropoffInfo = ' Date: ' + (appointment.preferredDate || 'ASAP') + '.';
+      }
+      smsText = 'Boris Enterprises: Great news! Your appointment for your '
+        + vehicle
+        + ' has been approved.' + dropoffInfo
+        + ' Questions? Call us at 231-675-0723.';
+    } else {
+      smsText = 'Boris Enterprises: We were unable to accommodate your requested appointment for your '
+        + vehicle
+        + '. Please call us at 231-675-0723 to reschedule.';
+    }
+
+    var banner = document.createElement('div');
+    banner.className = 'sms-banner';
+
+    var bannerId = 'sms-msg-' + appointmentId;
+
+    var html = '<div class="sms-banner-header">'
+      + '<span class="sms-banner-title">TEXT CUSTOMER</span>'
+      + '<button class="sms-banner-close" onclick="this.closest(\'.sms-banner\').remove()" title="Dismiss">&times;</button>'
+      + '</div>';
+
+    if (phone) {
+      html += '<div class="sms-banner-phone">'
+        + '<a href="tel:' + escapeHtml(phone) + '">' + escapeHtml(phone) + '</a>'
+        + '</div>';
+    } else {
+      html += '<div class="sms-banner-phone" style="color:#C62828;">No phone number on file</div>';
+    }
+
+    html += '<div class="sms-banner-message" id="' + bannerId + '">' + escapeHtml(smsText) + '</div>';
+    html += '<button class="sms-banner-copy" onclick="copySmsMessage(\'' + bannerId + '\', this)">Copy Message</button>';
+
+    banner.innerHTML = html;
+    card.appendChild(banner);
+  }
+
+  // --- Copy SMS Message to Clipboard ---
+  window.copySmsMessage = function(messageElementId, btn) {
+    var el = document.getElementById(messageElementId);
+    if (!el) return;
+    var text = el.textContent;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'Copied!';
+        btn.classList.add('sms-banner-copy-success');
+        setTimeout(function() {
+          btn.textContent = 'Copy Message';
+          btn.classList.remove('sms-banner-copy-success');
+        }, 2000);
+      }).catch(function() {
+        fallbackCopy(text, btn);
+      });
+    } else {
+      fallbackCopy(text, btn);
+    }
+  };
+
+  function fallbackCopy(text, btn) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      btn.textContent = 'Copied!';
+      btn.classList.add('sms-banner-copy-success');
+      setTimeout(function() {
+        btn.textContent = 'Copy Message';
+        btn.classList.remove('sms-banner-copy-success');
+      }, 2000);
+    } catch (e) {
+      btn.textContent = 'Copy failed';
+      setTimeout(function() { btn.textContent = 'Copy Message'; }, 2000);
+    }
+    document.body.removeChild(ta);
+  }
+
+  // --- Show Inline Approval Form (Drop-off Scheduling) ---
+  window.showApprovalForm = function(appointmentId) {
+    // Find the appointment data for pre-filling
+    var appointment = null;
+    for (var i = 0; i < allAppointments.length; i++) {
+      if (allAppointments[i]._id === appointmentId) {
+        appointment = allAppointments[i];
+        break;
+      }
+    }
+
+    var card = document.getElementById('appt-' + appointmentId);
+    if (!card) return;
+
+    // Remove any existing approval form on this card
+    var existingForm = card.querySelector('.approval-form');
+    if (existingForm) existingForm.remove();
+
+    // Pre-fill date from customer's preferred date (try to parse into YYYY-MM-DD for date input)
+    var prefillDate = '';
+    if (appointment && appointment.preferredDate) {
+      var parsed = new Date(appointment.preferredDate);
+      if (!isNaN(parsed.getTime())) {
+        var yyyy = parsed.getFullYear();
+        var mm = String(parsed.getMonth() + 1).padStart(2, '0');
+        var dd = String(parsed.getDate()).padStart(2, '0');
+        prefillDate = yyyy + '-' + mm + '-' + dd;
+      }
+    }
+
+    var formHtml = '<div class="approval-form-title">Schedule Drop-off</div>'
+      + '<div class="approval-form-row">'
+      + '  <div class="approval-form-field">'
+      + '    <label for="dropoff-date-' + escapeHtml(appointmentId) + '">Drop-off Date</label>'
+      + '    <input type="date" id="dropoff-date-' + escapeHtml(appointmentId) + '" value="' + prefillDate + '">'
+      + '  </div>'
+      + '  <div class="approval-form-field">'
+      + '    <label for="dropoff-time-' + escapeHtml(appointmentId) + '">Drop-off Time</label>'
+      + '    <input type="time" id="dropoff-time-' + escapeHtml(appointmentId) + '" value="09:00">'
+      + '  </div>'
+      + '</div>'
+      + '<div class="approval-form-actions">'
+      + '  <button class="btn-confirm-approve" onclick="confirmApproval(\'' + escapeHtml(appointmentId) + '\')">Confirm Approval</button>'
+      + '  <button class="approval-form-cancel" onclick="cancelApprovalForm(\'' + escapeHtml(appointmentId) + '\')">Cancel</button>'
+      + '</div>';
+
+    var formEl = document.createElement('div');
+    formEl.className = 'approval-form';
+    formEl.innerHTML = formHtml;
+    card.appendChild(formEl);
+  };
+
+  // --- Cancel / Dismiss Approval Form ---
+  window.cancelApprovalForm = function(appointmentId) {
+    var card = document.getElementById('appt-' + appointmentId);
+    if (!card) return;
+    var form = card.querySelector('.approval-form');
+    if (form) form.remove();
+  };
+
+  // --- Confirm Approval with Drop-off Date/Time ---
+  window.confirmApproval = function(appointmentId) {
+    var dateInput = document.getElementById('dropoff-date-' + appointmentId);
+    var timeInput = document.getElementById('dropoff-time-' + appointmentId);
+
+    var dropoffDate = dateInput ? dateInput.value : '';
+    var dropoffTime = timeInput ? timeInput.value : '';
+
+    // Format the time for display (e.g., "9:00 AM")
+    var dropoffTimeDisplay = '';
+    if (dropoffTime) {
+      var parts = dropoffTime.split(':');
+      var hours = parseInt(parts[0], 10);
+      var minutes = parts[1];
+      var ampm = hours >= 12 ? 'PM' : 'AM';
+      var displayHours = hours % 12;
+      if (displayHours === 0) displayHours = 12;
+      dropoffTimeDisplay = displayHours + ':' + minutes + ' ' + ampm;
+    }
+
+    // Format the date for display (e.g., "Feb 21, 2026")
+    var dropoffDateDisplay = '';
+    if (dropoffDate) {
+      var d = new Date(dropoffDate + 'T00:00:00');
+      if (!isNaN(d.getTime())) {
+        dropoffDateDisplay = d.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      } else {
+        dropoffDateDisplay = dropoffDate;
+      }
+    }
+
+    // Disable the confirm button to prevent double-clicks
+    var card = document.getElementById('appt-' + appointmentId);
+    var confirmBtn = card ? card.querySelector('.btn-confirm-approve') : null;
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Approving...';
+    }
+
+    approveAppointment(appointmentId, dropoffDate, dropoffDateDisplay, dropoffTime, dropoffTimeDisplay);
+  };
+
   // --- Approve Appointment ---
-  window.approveAppointment = function(appointmentId) {
-    db.collection('appointments').doc(appointmentId).update({
+  window.approveAppointment = function(appointmentId, dropoffDate, dropoffDateDisplay, dropoffTime, dropoffTimeDisplay) {
+    var updateData = {
       status: 'approved',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(function() {
+    };
+    if (dropoffDate) updateData.dropoffDate = dropoffDate;
+    if (dropoffTime) updateData.dropoffTime = dropoffTimeDisplay || dropoffTime;
+
+    db.collection('appointments').doc(appointmentId).update(updateData).then(function() {
       // Update local data and find the appointment object
       var appointment = null;
       for (var i = 0; i < allAppointments.length; i++) {
         if (allAppointments[i]._id === appointmentId) {
           allAppointments[i].status = 'approved';
+          if (dropoffDate) allAppointments[i].dropoffDate = dropoffDateDisplay || dropoffDate;
+          if (dropoffTime) allAppointments[i].dropoffTime = dropoffTimeDisplay || dropoffTime;
           appointment = allAppointments[i];
           break;
         }
@@ -255,6 +481,18 @@
       // Send email notification (fire-and-forget)
       if (appointment && appointment.userEmail) {
         try {
+          // Build drop-off line for email
+          var emailDropoff = '';
+          if (appointment.dropoffDate) {
+            emailDropoff = '<p style="font-family: Arial, sans-serif;"><strong>Drop-off Date:</strong> ' + escapeHtml(appointment.dropoffDate);
+            if (appointment.dropoffTime) {
+              emailDropoff += ' at <strong>' + escapeHtml(appointment.dropoffTime) + '</strong>';
+            }
+            emailDropoff += '</p>';
+          } else {
+            emailDropoff = '<p style="font-family: Arial, sans-serif;"><strong>Date:</strong> ' + escapeHtml(appointment.preferredDate || 'ASAP') + '</p>';
+          }
+
           db.collection('mail').add({
             to: appointment.userEmail,
             message: {
@@ -264,7 +502,7 @@
                 + '<p style="font-family: Arial, sans-serif;">Great news! Your appointment for your <strong>'
                 + escapeHtml(appointment.vehicleYear) + ' ' + escapeHtml(appointment.vehicleMake) + ' ' + escapeHtml(appointment.vehicleModel)
                 + '</strong> has been <strong style="color: green;">approved</strong>.</p>'
-                + '<p style="font-family: Arial, sans-serif;"><strong>Date:</strong> ' + escapeHtml(appointment.preferredDate || 'ASAP') + '</p>'
+                + emailDropoff
                 + '<p style="font-family: Arial, sans-serif;">If you need to reschedule or have questions, give us a call at <strong>231-675-0723</strong>.</p>'
                 + '<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">'
                 + '<p style="font-family: Arial, sans-serif; color: #888; font-size: 12px;">Boris Enterprises<br>9890 Whitfield Rd, East Jordan, MI 49727<br>231-675-0723</p>'
@@ -273,6 +511,37 @@
         } catch (emailError) {
           console.error('Error sending approval email:', emailError);
         }
+      }
+
+      // SMS DISABLED — Uncomment to re-enable once Twilio verification is complete
+      /*
+      // Send SMS notification (fire-and-forget via Cloud Function)
+      if (appointment && appointment.userPhone) {
+        try {
+          var smsDropoff = '';
+          if (appointment.dropoffDate) {
+            smsDropoff = ' Please drop off your vehicle on ' + appointment.dropoffDate;
+            if (appointment.dropoffTime) smsDropoff += ' at ' + appointment.dropoffTime;
+            smsDropoff += '.';
+          } else {
+            smsDropoff = ' Date: ' + (appointment.preferredDate || 'ASAP') + '.';
+          }
+          db.collection('sms').add({
+            to: appointment.userPhone,
+            body: 'Boris Enterprises: Great news! Your appointment for your '
+              + (appointment.vehicleYear || '') + ' ' + (appointment.vehicleMake || '') + ' ' + (appointment.vehicleModel || '')
+              + ' has been approved.' + smsDropoff
+              + ' Questions? Call 231-675-0723.'
+          });
+        } catch (smsError) {
+          console.error('Error sending approval SMS:', smsError);
+        }
+      }
+      */
+
+      // Show SMS copy banner so admin can paste into Google Voice
+      if (appointment) {
+        showSmsBanner(appointmentId, appointment, 'approved');
       }
     }).catch(function(error) {
       console.error('Error approving appointment:', error);
@@ -319,6 +588,28 @@
           console.error('Error sending denial email:', emailError);
         }
       }
+
+      // SMS DISABLED — Uncomment to re-enable once Twilio verification is complete
+      /*
+      // Send SMS notification (fire-and-forget via Cloud Function)
+      if (appointment && appointment.userPhone) {
+        try {
+          db.collection('sms').add({
+            to: appointment.userPhone,
+            body: 'Boris Enterprises: Unfortunately, we are unable to accommodate your requested appointment for your '
+              + (appointment.vehicleYear || '') + ' ' + (appointment.vehicleMake || '') + ' ' + (appointment.vehicleModel || '')
+              + ' at this time. Please call 231-675-0723 to reschedule.'
+          });
+        } catch (smsError) {
+          console.error('Error sending denial SMS:', smsError);
+        }
+      }
+      */
+
+      // Show SMS copy banner so admin can paste into Google Voice
+      if (appointment) {
+        showSmsBanner(appointmentId, appointment, 'denied');
+      }
     }).catch(function(error) {
       console.error('Error denying appointment:', error);
       alert('Error denying appointment. Please try again.');
@@ -330,11 +621,56 @@
     var card = document.getElementById('appt-' + appointmentId);
     if (!card) return;
 
+    // Remove inline approval form if present
+    var approvalForm = card.querySelector('.approval-form');
+    if (approvalForm) approvalForm.remove();
+
     // Update the status badge
     var statusBadge = card.querySelector('.appointment-status');
     if (statusBadge) {
       statusBadge.className = 'appointment-status status-' + newStatus;
       statusBadge.textContent = newStatus;
+    }
+
+    // Show drop-off info for approved appointments
+    if (newStatus === 'approved') {
+      var appointment = null;
+      for (var i = 0; i < allAppointments.length; i++) {
+        if (allAppointments[i]._id === appointmentId) {
+          appointment = allAppointments[i];
+          break;
+        }
+      }
+      if (appointment && (appointment.dropoffDate || appointment.dropoffTime)) {
+        // Insert drop-off line into the details area (before the message or submitted line)
+        var existingDropoff = card.querySelector('.appt-dropoff');
+        if (!existingDropoff) {
+          var detailsDiv = card.querySelector('.appt-details');
+          if (detailsDiv) {
+            var dropoffStr = 'Drop-off: ' + (appointment.dropoffDate || 'N/A');
+            if (appointment.dropoffTime) {
+              dropoffStr += ' at ' + appointment.dropoffTime;
+            }
+            var dropoffEl = document.createElement('div');
+            dropoffEl.className = 'appt-dropoff';
+            dropoffEl.textContent = dropoffStr;
+            // Insert after the preferred date line
+            var prefDateEl = null;
+            var dateEls = detailsDiv.querySelectorAll('.appt-date');
+            for (var j = 0; j < dateEls.length; j++) {
+              if (dateEls[j].textContent.indexOf('Preferred Date') !== -1) {
+                prefDateEl = dateEls[j];
+                break;
+              }
+            }
+            if (prefDateEl && prefDateEl.nextSibling) {
+              detailsDiv.insertBefore(dropoffEl, prefDateEl.nextSibling);
+            } else {
+              detailsDiv.appendChild(dropoffEl);
+            }
+          }
+        }
+      }
     }
 
     // Remove action buttons

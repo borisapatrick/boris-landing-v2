@@ -195,7 +195,7 @@
   }
 
   // --- Signup ---
-  window.handleSignup = function(email, password, name, phone) {
+  window.handleSignup = function(email, password, name, phone, smsConsent) {
     window._authActionInProgress = true;
     return auth.createUserWithEmailAndPassword(email, password)
       .then(function(userCredential) {
@@ -207,6 +207,7 @@
             name: name,
             phone: phone,
             email: email,
+            smsConsent: !!smsConsent,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
         });

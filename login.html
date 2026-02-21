@@ -110,6 +110,12 @@
               <label for="signupPasswordConfirm">Confirm Password<span class="required-star">*</span></label>
               <input type="password" id="signupPasswordConfirm" required placeholder="Confirm your password" minlength="6">
             </div>
+            <div class="form-group consent-group">
+              <label class="consent-label">
+                <input type="checkbox" id="signupSmsConsent" name="sms_consent" value="yes">
+                <span>I agree to receive communications from Boris Enterprises. <a href="#" class="consent-details-link" onclick="event.preventDefault(); document.getElementById('signupConsentModal').style.display='flex';">Details</a></span>
+              </label>
+            </div>
             <button type="submit" class="btn btn-primary btn-full" id="signupBtn">CREATE ACCOUNT</button>
           </form>
 
@@ -142,6 +148,23 @@
       <p class="footer-copy">&copy; 2026 Boris Enterprises. All rights reserved.</p>
     </div>
   </footer>
+
+  <div id="signupConsentModal" class="consent-modal-overlay" onclick="this.style.display='none';">
+    <div class="consent-modal-card" onclick="event.stopPropagation();">
+      <button type="button" class="consent-modal-close" onclick="document.getElementById('signupConsentModal').style.display='none';">&times;</button>
+      <h3 class="consent-modal-title">Communications Consent</h3>
+      <div class="consent-modal-body">
+        <p>By checking this box, you agree to receive communications from Boris Enterprises, including:</p>
+        <ul>
+          <li>Appointment confirmations, updates, and reminders via SMS and email</li>
+          <li>Service recommendations and follow-ups</li>
+          <li>Promotional offers and seasonal specials</li>
+          <li>Important notices about your vehicle</li>
+        </ul>
+      </div>
+      <p class="consent-modal-note">Message and data rates may apply for SMS. You can opt out at any time by contacting us at <a href="tel:2316750723">231-675-0723</a> or replying STOP to any text message.</p>
+    </div>
+  </div>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -295,9 +318,11 @@
         return;
       }
 
+      var smsConsent = document.getElementById('signupSmsConsent').checked;
+
       setButtonLoading(btn, true);
 
-      handleSignup(email, password, name, phone)
+      handleSignup(email, password, name, phone, smsConsent)
         .then(function() {
           window.location.href = 'dashboard.html';
         })
