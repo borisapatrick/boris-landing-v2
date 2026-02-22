@@ -224,6 +224,33 @@ section {
   color: #1877F2 !important;
 }
 
+.nav-appt-cta {
+  display: inline-block;
+  font-size: 0.85rem !important;
+  padding: 8px 18px !important;
+  color: var(--red) !important;
+  background: transparent !important;
+  border: 2px solid var(--red) !important;
+  border-radius: 4px;
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.3s, color 0.3s, transform 0.2s;
+  white-space: nowrap;
+}
+
+.nav-appt-cta:hover {
+  background: var(--red) !important;
+  color: var(--white) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(204, 26, 26, 0.3);
+}
+
+.nav-appt-cta::after {
+  display: none !important;
+}
+
 .nav-cta {
   font-size: 0.85rem !important;
   padding: 10px 20px !important;
@@ -1151,6 +1178,13 @@ section {
 
   .nav-links a::after {
     display: none;
+  }
+
+  .nav-appt-cta {
+    display: block !important;
+    margin: 8px 24px !important;
+    text-align: center;
+    padding: 12px 18px !important;
   }
 
   .hero-subtitle {

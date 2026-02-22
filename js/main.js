@@ -39,7 +39,8 @@ if (contactForm) {
     // ALWAYS prevent native form POST — we handle submission via JS
     e.preventDefault();
 
-    var name = document.getElementById('name');
+    var firstName = document.getElementById('first-name');
+    var lastName = document.getElementById('last-name');
     var phone = document.getElementById('phone');
     var submitBtn = contactForm.querySelector('button[type="submit"]');
 
@@ -50,10 +51,17 @@ if (contactForm) {
     var prevConsentError = document.querySelector('.consent-error');
     if (prevConsentError) prevConsentError.remove();
 
-    // Validate name
-    if (!name.value.trim()) {
-      name.style.borderColor = '#CC1A1A';
-      name.focus();
+    // Validate first name
+    if (!firstName.value.trim()) {
+      firstName.style.borderColor = '#CC1A1A';
+      firstName.focus();
+      return;
+    }
+
+    // Validate last name
+    if (!lastName.value.trim()) {
+      lastName.style.borderColor = '#CC1A1A';
+      lastName.focus();
       return;
     }
 
@@ -89,7 +97,7 @@ if (contactForm) {
     try {
       // Collect form data for Firestore
       var formData = {
-        name: name.value.trim(),
+        name: firstName.value.trim() + ' ' + lastName.value.trim(),
         phone: phone.value.trim(),
         year: document.getElementById('year').value.trim(),
         make: document.getElementById('make').value.trim(),

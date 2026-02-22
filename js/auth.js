@@ -295,19 +295,22 @@
   }
 
   // --- Signup ---
-  window.handleSignup = function(email, password, name, phone, smsConsent) {
+  window.handleSignup = function(email, password, firstName, lastName, phone, smsConsent) {
     console.log('[Signup] Starting signup for:', email);
+    var fullName = firstName + ' ' + lastName;
     window._authActionInProgress = true;
     return auth.createUserWithEmailAndPassword(email, password)
       .then(function(userCredential) {
         var user = userCredential.user;
         console.log('[Signup] User created in Firebase Auth. UID:', user.uid);
         // Update display name
-        return user.updateProfile({ displayName: name }).then(function() {
+        return user.updateProfile({ displayName: fullName }).then(function() {
           console.log('[Signup] Display name updated.');
           // Save profile to Firestore with emailVerified: false (new signup requiring verification)
           return db.collection('users').doc(user.uid).set({
-            name: name,
+            name: fullName,
+            firstName: firstName,
+            lastName: lastName,
             phone: phone,
             email: email,
             smsConsent: !!smsConsent,
@@ -464,17 +467,26 @@
 
   // --- Pre-fill Contact Form for Logged-in Users ---
   function prefillContactForm(user) {
-    var nameField = document.getElementById('name');
+    var firstNameField = document.getElementById('first-name');
+    var lastNameField = document.getElementById('last-name');
     var phoneField = document.getElementById('phone');
 
-    if (!nameField) return;
+    if (!firstNameField) return;
 
     // Get user profile from Firestore
     db.collection('users').doc(user.uid).get().then(function(doc) {
       if (doc.exists) {
         var data = doc.data();
-        if (nameField && !nameField.value && data.name) {
-          nameField.value = data.name;
+        if (data.name) {
+          var nameParts = data.name.split(' ');
+          var first = nameParts[0] || '';
+          var last = nameParts.slice(1).join(' ') || '';
+          if (firstNameField && !firstNameField.value) {
+            firstNameField.value = first;
+          }
+          if (lastNameField && !lastNameField.value) {
+            lastNameField.value = last;
+          }
         }
         if (phoneField && !phoneField.value && data.phone) {
           phoneField.value = data.phone;

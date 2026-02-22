@@ -55,6 +55,18 @@
     });
   }
 
+  // --- Phone Formatting for Admin Forms ---
+  window.formatAdminPhone = function(input) {
+    var digits = input.value.replace(/\D/g, '');
+    if (digits.length <= 3) {
+      input.value = digits.length ? '(' + digits : '';
+    } else if (digits.length <= 6) {
+      input.value = '(' + digits.substring(0,3) + ') ' + digits.substring(3);
+    } else {
+      input.value = '(' + digits.substring(0,3) + ') ' + digits.substring(3,6) + '-' + digits.substring(6,10);
+    }
+  };
+
   // --- Show Admin Access Denied ---
   // Called by auth.js when logged-in user is not an admin
   window.showAdminAccessDenied = function() {
@@ -919,24 +931,32 @@
       + '<option value="approved"' + (appointment.status === 'approved' ? ' selected' : '') + '>approved</option>'
       + '<option value="denied"' + (appointment.status === 'denied' ? ' selected' : '') + '>denied</option>';
 
+    // Split userName into first and last on first space
+    var fullName = appointment.userName || '';
+    var spaceIdx = fullName.indexOf(' ');
+    var editFirstName = spaceIdx !== -1 ? fullName.substring(0, spaceIdx) : fullName;
+    var editLastName = spaceIdx !== -1 ? fullName.substring(spaceIdx + 1) : '';
+
     var formHtml = '<div class="approval-form-title">Edit Appointment</div>'
       + '<div class="approval-form-row">'
-      + '  <div class="approval-form-field"><label for="edit-name-' + eid + '">Customer Name</label>'
-      + '    <input type="text" id="edit-name-' + eid + '" value="' + escapeHtml(appointment.userName || '') + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-firstname-' + eid + '">First Name</label>'
+      + '    <input type="text" id="edit-firstname-' + eid + '" value="' + escapeHtml(editFirstName) + '"></div>'
+      + '  <div class="approval-form-field"><label for="edit-lastname-' + eid + '">Last Name</label>'
+      + '    <input type="text" id="edit-lastname-' + eid + '" value="' + escapeHtml(editLastName) + '"></div>'
       + '  <div class="approval-form-field"><label for="edit-email-' + eid + '">Email</label>'
       + '    <input type="email" id="edit-email-' + eid + '" value="' + escapeHtml(appointment.userEmail || '') + '"></div>'
       + '  <div class="approval-form-field"><label for="edit-phone-' + eid + '">Phone</label>'
-      + '    <input type="tel" id="edit-phone-' + eid + '" value="' + escapeHtml(appointment.userPhone || '') + '"></div>'
+      + '    <input type="tel" id="edit-phone-' + eid + '" maxlength="14" placeholder="(231) 675-0723" oninput="formatAdminPhone(this)" value="' + escapeHtml(appointment.userPhone || '') + '"></div>'
       + '</div>'
       + '<div class="approval-form-row">'
       + '  <div class="approval-form-field"><label for="edit-year-' + eid + '">Year</label>'
-      + '    <input type="text" id="edit-year-' + eid + '" value="' + escapeHtml(appointment.vehicleYear || '') + '"></div>'
+      + '    <input type="number" id="edit-year-' + eid + '" min="1900" max="2027" placeholder="2003" value="' + escapeHtml(appointment.vehicleYear || '') + '"></div>'
       + '  <div class="approval-form-field"><label for="edit-make-' + eid + '">Make</label>'
-      + '    <input type="text" id="edit-make-' + eid + '" value="' + escapeHtml(appointment.vehicleMake || '') + '"></div>'
+      + '    <input type="text" id="edit-make-' + eid + '" placeholder="e.g. Dodge" value="' + escapeHtml(appointment.vehicleMake || '') + '"></div>'
       + '  <div class="approval-form-field"><label for="edit-model-' + eid + '">Model</label>'
-      + '    <input type="text" id="edit-model-' + eid + '" value="' + escapeHtml(appointment.vehicleModel || '') + '"></div>'
+      + '    <input type="text" id="edit-model-' + eid + '" placeholder="e.g. Ram 1500" value="' + escapeHtml(appointment.vehicleModel || '') + '"></div>'
       + '  <div class="approval-form-field"><label for="edit-plate-' + eid + '">Plate</label>'
-      + '    <input type="text" id="edit-plate-' + eid + '" value="' + escapeHtml(appointment.licensePlate || '') + '"></div>'
+      + '    <input type="text" id="edit-plate-' + eid + '" maxlength="8" placeholder="e.g. ABC1234" style="text-transform:uppercase;" value="' + escapeHtml(appointment.licensePlate || '') + '"></div>'
       + '</div>'
       + '<div class="approval-form-row">'
       + '  <div class="approval-form-field"><label for="edit-prefdate-' + eid + '">Preferred Date</label>'
@@ -973,8 +993,11 @@
 
   // --- Save Edit ---
   window.saveEdit = function(appointmentId) {
+    var firstName = document.getElementById('edit-firstname-' + appointmentId).value.trim();
+    var lastName = document.getElementById('edit-lastname-' + appointmentId).value.trim();
+    var combinedName = lastName ? firstName + ' ' + lastName : firstName;
     var data = {
-      userName: document.getElementById('edit-name-' + appointmentId).value.trim(),
+      userName: combinedName,
       userEmail: document.getElementById('edit-email-' + appointmentId).value.trim(),
       userPhone: document.getElementById('edit-phone-' + appointmentId).value.trim(),
       vehicleYear: document.getElementById('edit-year-' + appointmentId).value.trim(),
@@ -1022,22 +1045,24 @@
       + '<div class="edit-form" style="width:100%;">'
       + '  <div class="approval-form-title">New Appointment</div>'
       + '  <div class="approval-form-row">'
-      + '    <div class="approval-form-field"><label for="new-name">Customer Name *</label>'
-      + '      <input type="text" id="new-name" placeholder="Full name"></div>'
+      + '    <div class="approval-form-field"><label for="new-firstname">First Name *</label>'
+      + '      <input type="text" id="new-firstname" placeholder="First name"></div>'
+      + '    <div class="approval-form-field"><label for="new-lastname">Last Name *</label>'
+      + '      <input type="text" id="new-lastname" placeholder="Last name"></div>'
       + '    <div class="approval-form-field"><label for="new-email">Email</label>'
       + '      <input type="email" id="new-email" placeholder="email@example.com"></div>'
       + '    <div class="approval-form-field"><label for="new-phone">Phone</label>'
-      + '      <input type="tel" id="new-phone" placeholder="231-555-1234"></div>'
+      + '      <input type="tel" id="new-phone" maxlength="14" placeholder="(231) 675-0723" oninput="formatAdminPhone(this)"></div>'
       + '  </div>'
       + '  <div class="approval-form-row">'
       + '    <div class="approval-form-field"><label for="new-year">Year *</label>'
-      + '      <input type="text" id="new-year" placeholder="2024"></div>'
+      + '      <input type="number" id="new-year" min="1900" max="2027" placeholder="2003"></div>'
       + '    <div class="approval-form-field"><label for="new-make">Make *</label>'
-      + '      <input type="text" id="new-make" placeholder="Ford"></div>'
+      + '      <input type="text" id="new-make" placeholder="e.g. Dodge"></div>'
       + '    <div class="approval-form-field"><label for="new-model">Model *</label>'
-      + '      <input type="text" id="new-model" placeholder="F-150"></div>'
+      + '      <input type="text" id="new-model" placeholder="e.g. Ram 1500"></div>'
       + '    <div class="approval-form-field"><label for="new-plate">Plate</label>'
-      + '      <input type="text" id="new-plate" placeholder="ABC1234"></div>'
+      + '      <input type="text" id="new-plate" maxlength="8" placeholder="e.g. ABC1234" style="text-transform:uppercase;"></div>'
       + '  </div>'
       + '  <div class="approval-form-row">'
       + '    <div class="approval-form-field"><label for="new-prefdate">Preferred Date</label>'
@@ -1071,18 +1096,21 @@
 
   // --- Submit New Appointment ---
   window.submitNewAppointment = function() {
-    var name = document.getElementById('new-name').value.trim();
+    var firstName = document.getElementById('new-firstname').value.trim();
+    var lastName = document.getElementById('new-lastname').value.trim();
     var year = document.getElementById('new-year').value.trim();
     var make = document.getElementById('new-make').value.trim();
     var model = document.getElementById('new-model').value.trim();
 
-    if (!name || !year || !make || !model) {
-      alert('Please fill in the required fields: Customer Name, Year, Make, and Model.');
+    if (!firstName || !lastName || !year || !make || !model) {
+      alert('Please fill in the required fields: First Name, Last Name, Year, Make, and Model.');
       return;
     }
 
+    var combinedName = firstName + ' ' + lastName;
+
     var data = {
-      userName: name,
+      userName: combinedName,
       userEmail: document.getElementById('new-email').value.trim(),
       userPhone: document.getElementById('new-phone').value.trim(),
       vehicleYear: year,
