@@ -168,16 +168,16 @@
           <div class="form-row">
             <div class="form-group">
               <label for="first-name">First Name<span class="required-star">*</span></label>
-              <input type="text" id="first-name" name="first-name" required placeholder="First name">
+              <input type="text" id="first-name" name="first-name" required placeholder="First name" autocomplete="given-name">
             </div>
             <div class="form-group">
               <label for="last-name">Last Name<span class="required-star">*</span></label>
-              <input type="text" id="last-name" name="last-name" required placeholder="Last name">
+              <input type="text" id="last-name" name="last-name" required placeholder="Last name" autocomplete="family-name">
             </div>
           </div>
           <div class="form-group">
             <label for="phone">Phone<span class="required-star">*</span></label>
-            <input type="tel" id="phone" name="phone" required placeholder="(231) 675-0723" maxlength="14" pattern="\(\d{3}\) \d{3}-\d{4}" oninput="formatPhone(this)">
+            <input type="tel" id="phone" name="phone" required placeholder="(231) 675-0723" maxlength="14" pattern="\(\d{3}\) \d{3}-\d{4}" oninput="formatPhone(this)" autocomplete="tel">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -229,7 +229,7 @@
           <h3>LOCATION</h3>
           <p>9890 Whitfield Rd<br>East Jordan, MI 49727</p>
           <div class="map-embed" style="margin-top: 24px;">
-            <iframe src="https://www.google.com/maps?q=9890+Whitfield+Rd+East+Jordan+MI+49727&output=embed" width="100%" height="350" style="border:0; border-radius: 8px;" allowfullscreen="" loading="lazy" title="Boris Enterprises - 9890 Whitfield Rd, East Jordan, MI 49727"></iframe>
+            <iframe src="https://maps.google.com/maps?q=9890+Whitfield+Rd,+East+Jordan,+MI+49727&t=&z=15&ie=UTF8&iwloc=&output=embed" width="100%" height="350" style="border:0; border-radius: 8px;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Boris Enterprises - 9890 Whitfield Rd, East Jordan, MI 49727"></iframe>
           </div>
         </div>
       </div>

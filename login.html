@@ -85,11 +85,11 @@
           <form class="auth-form" id="loginForm" onsubmit="submitLogin(event)">
             <div class="form-group">
               <label for="loginEmail">Email<span class="required-star">*</span></label>
-              <input type="email" id="loginEmail" required placeholder="you@example.com">
+              <input type="email" id="loginEmail" required placeholder="you@example.com" autocomplete="email">
             </div>
             <div class="form-group">
               <label for="loginPassword">Password<span class="required-star">*</span></label>
-              <input type="password" id="loginPassword" required placeholder="Your password" minlength="6">
+              <input type="password" id="loginPassword" required placeholder="Your password" minlength="6" autocomplete="current-password">
             </div>
             <button type="submit" class="btn btn-primary btn-full" id="loginBtn">LOG IN</button>
             <p class="auth-forgot">
@@ -102,27 +102,27 @@
           <form class="auth-form" id="signupForm" onsubmit="submitSignup(event)">
             <div class="form-group">
               <label for="signupFirstName">First Name<span class="required-star">*</span></label>
-              <input type="text" id="signupFirstName" name="firstName" required placeholder="First name">
+              <input type="text" id="signupFirstName" name="firstName" required placeholder="First name" autocomplete="given-name">
             </div>
             <div class="form-group">
               <label for="signupLastName">Last Name<span class="required-star">*</span></label>
-              <input type="text" id="signupLastName" name="lastName" required placeholder="Last name">
+              <input type="text" id="signupLastName" name="lastName" required placeholder="Last name" autocomplete="family-name">
             </div>
             <div class="form-group">
               <label for="signupPhone">Phone<span class="required-star">*</span></label>
-              <input type="tel" id="signupPhone" name="phone" required placeholder="(231) 675-0723" maxlength="14" oninput="formatPhone(this)">
+              <input type="tel" id="signupPhone" name="phone" required placeholder="(231) 675-0723" maxlength="14" oninput="formatPhone(this)" autocomplete="tel">
             </div>
             <div class="form-group">
               <label for="signupEmail">Email<span class="required-star">*</span></label>
-              <input type="email" id="signupEmail" required placeholder="you@example.com">
+              <input type="email" id="signupEmail" required placeholder="you@example.com" autocomplete="email">
             </div>
             <div class="form-group">
               <label for="signupPassword">Password<span class="required-star">*</span></label>
-              <input type="password" id="signupPassword" required placeholder="At least 6 characters" minlength="6">
+              <input type="password" id="signupPassword" required placeholder="At least 6 characters" minlength="6" autocomplete="new-password">
             </div>
             <div class="form-group">
               <label for="signupPasswordConfirm">Confirm Password<span class="required-star">*</span></label>
-              <input type="password" id="signupPasswordConfirm" required placeholder="Confirm your password" minlength="6">
+              <input type="password" id="signupPasswordConfirm" required placeholder="Confirm your password" minlength="6" autocomplete="new-password">
             </div>
             <div class="form-group consent-group">
               <label class="consent-label">
@@ -139,7 +139,7 @@
             <p class="auth-subtitle">Enter your email address and we'll send you a link to reset your password.</p>
             <div class="form-group">
               <label for="forgotEmail">Email<span class="required-star">*</span></label>
-              <input type="email" id="forgotEmail" required placeholder="you@example.com">
+              <input type="email" id="forgotEmail" required placeholder="you@example.com" autocomplete="email">
             </div>
             <button type="submit" class="btn btn-primary btn-full" id="forgotBtn">SEND RESET LINK</button>
             <p class="auth-back">
