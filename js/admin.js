@@ -55,6 +55,16 @@
     });
   }
 
+  // --- Get Collection for Appointment ---
+  function getApptCollection(appointmentId) {
+    for (var i = 0; i < allAppointments.length; i++) {
+      if (allAppointments[i]._id === appointmentId) {
+        return allAppointments[i]._collection || 'appointments';
+      }
+    }
+    return 'appointments';
+  }
+
   // --- Phone Formatting for Admin Forms ---
   window.formatAdminPhone = function(input) {
     var digits = input.value.replace(/\D/g, '');
@@ -98,31 +108,61 @@
     initFilterTabs();
   };
 
-  // --- Load Appointments ---
+  // --- Load Appointments (both logged-in and guest) ---
   function loadAppointments() {
     var container = document.getElementById('appointments-list');
     if (!container) return;
 
-    db.collection('appointments')
+    var apptPromise = db.collection('appointments')
       .orderBy('createdAt', 'desc')
-      .get()
-      .then(function(snapshot) {
-        if (snapshot.empty) {
-          allAppointments = [];
-          updateStats();
-          container.innerHTML = '<p class="empty-state">No appointments yet.</p>';
-          return;
-        }
+      .get();
+
+    var guestPromise = db.collection('guest_appointments')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    Promise.all([apptPromise, guestPromise])
+      .then(function(results) {
+        var apptSnapshot = results[0];
+        var guestSnapshot = results[1];
 
         allAppointments = [];
-        snapshot.forEach(function(doc) {
+
+        // Logged-in user appointments
+        apptSnapshot.forEach(function(doc) {
           var data = doc.data();
           data._id = doc.id;
+          data._collection = 'appointments';
           allAppointments.push(data);
         });
 
+        // Guest appointments (normalize field names)
+        guestSnapshot.forEach(function(doc) {
+          var data = doc.data();
+          data._id = doc.id;
+          data._collection = 'guest_appointments';
+          data._isGuest = true;
+          // Normalize to match logged-in appointment fields
+          if (data.name && !data.userName) data.userName = data.name;
+          if (data.phone && !data.userPhone) data.userPhone = data.phone;
+          if (!data.userEmail) data.userEmail = '';
+          allAppointments.push(data);
+        });
+
+        // Sort combined list by createdAt descending
+        allAppointments.sort(function(a, b) {
+          var aTime = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt).getTime()) : 0;
+          var bTime = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime()) : 0;
+          return bTime - aTime;
+        });
+
         updateStats();
-        renderAppointments();
+
+        if (allAppointments.length === 0) {
+          container.innerHTML = '<p class="empty-state">No appointments yet.</p>';
+        } else {
+          renderAppointments();
+        }
       })
       .catch(function(error) {
         console.error('Error loading appointments:', error);
@@ -212,7 +252,11 @@
     var html = '';
     html += '<div class="admin-appt-card" id="appt-' + escapeHtml(id) + '">';
     html += '  <div class="appt-details">';
-    html += '    <div class="appt-customer">' + escapeHtml(customerName) + '</div>';
+    html += '    <div class="appt-customer">' + escapeHtml(customerName);
+    if (appt._isGuest) {
+      html += ' <span style="display:inline-block;background:#FF8F00;color:#FFF;font-size:0.6rem;padding:2px 6px;border-radius:3px;vertical-align:middle;margin-left:6px;letter-spacing:0.5px;">GUEST</span>';
+    }
+    html += '</div>';
 
     if (customerEmail) {
       html += '    <div class="appt-date">' + escapeHtml(customerEmail) + '</div>';
@@ -248,6 +292,9 @@
     if (status === 'pending') {
       html += '    <button class="btn-approve" onclick="showApprovalForm(\'' + escapeHtml(id) + '\')">Approve</button>';
       html += '    <button class="btn-deny" onclick="showDenyConfirm(\'' + escapeHtml(id) + '\')">Deny</button>';
+    }
+    if (status === 'approved' || status === 'denied') {
+      html += '    <button class="btn-approve" onclick="reopenAppointment(\'' + escapeHtml(id) + '\')" style="background:#FF8F00;">Reopen</button>';
     }
     html += '    <button class="btn-edit" onclick="showEditForm(\'' + escapeHtml(id) + '\')">Edit</button>';
     html += '    <button class="btn-delete" onclick="deleteAppointment(\'' + escapeHtml(id) + '\')">Delete</button>';
@@ -619,6 +666,27 @@
   };
 
   // --- Approve Appointment ---
+  // --- Reopen Appointment (set back to pending) ---
+  window.reopenAppointment = function(appointmentId) {
+    var collectionName = getApptCollection(appointmentId);
+    db.collection(collectionName).doc(appointmentId).update({
+      status: 'pending',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      for (var i = 0; i < allAppointments.length; i++) {
+        if (allAppointments[i]._id === appointmentId) {
+          allAppointments[i].status = 'pending';
+          break;
+        }
+      }
+      updateStats();
+      refreshAppointmentCard(appointmentId, 'pending');
+    }).catch(function(error) {
+      console.error('Error reopening appointment:', error);
+      alert('Error reopening appointment. Please try again.');
+    });
+  };
+
   window.approveAppointment = function(appointmentId, dropoffDate, dropoffDateDisplay, dropoffTime, dropoffTimeDisplay) {
     var updateData = {
       status: 'approved',
@@ -627,7 +695,10 @@
     if (dropoffDate) updateData.dropoffDate = dropoffDate;
     if (dropoffTime) updateData.dropoffTime = dropoffTimeDisplay || dropoffTime;
 
-    db.collection('appointments').doc(appointmentId).update(updateData).then(function() {
+    // Determine collection from local data
+    var collectionName = getApptCollection(appointmentId);
+
+    db.collection(collectionName).doc(appointmentId).update(updateData).then(function() {
       // Update local data and find the appointment object
       var appointment = null;
       for (var i = 0; i < allAppointments.length; i++) {
@@ -648,28 +719,40 @@
           // Build drop-off line for email
           var emailDropoff = '';
           if (appointment.dropoffDate) {
-            emailDropoff = '<p style="font-family: Arial, sans-serif;"><strong>Drop-off Date:</strong> ' + escapeHtml(appointment.dropoffDate);
+            emailDropoff = '<p style="font-size: 14px; color: #444; margin: 0;"><strong>Drop-off Date:</strong> ' + escapeHtml(appointment.dropoffDate);
             if (appointment.dropoffTime) {
               emailDropoff += ' at <strong>' + escapeHtml(appointment.dropoffTime) + '</strong>';
             }
             emailDropoff += '</p>';
           } else {
-            emailDropoff = '<p style="font-family: Arial, sans-serif;"><strong>Date:</strong> ' + escapeHtml(appointment.preferredDate || 'ASAP') + '</p>';
+            emailDropoff = '<p style="font-size: 14px; color: #444; margin: 0;"><strong>Date:</strong> ' + escapeHtml(appointment.preferredDate || 'ASAP') + '</p>';
           }
 
           db.collection('mail').add({
             to: appointment.userEmail,
             message: {
               subject: 'Appointment Approved — Boris Enterprises',
-              html: '<h2 style="color: #CC1A1A; font-family: Arial, sans-serif;">Boris Enterprises</h2>'
-                + '<p style="font-family: Arial, sans-serif;">Hi ' + escapeHtml(appointment.userName) + ',</p>'
-                + '<p style="font-family: Arial, sans-serif;">Great news! Your appointment for your <strong>'
+              html: '<div style="background-color: #f2f2f2; padding: 24px 0; font-family: Arial, Helvetica, sans-serif;">'
+                + '<div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">'
+                + '<div style="padding: 24px 0 16px; text-align: center;">'
+                + '<img src="https://borisenterprises.com/assets/logo.png" alt="Boris Enterprises" style="width: 160px; display: block; margin: 0 auto;" />'
+                + '</div>'
+                + '<div style="background-color: #CC1A1A; padding: 10px 0; text-align: center;">'
+                + '<p style="margin: 0; color: #ffffff; font-size: 13px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Appointment Confirmed</p>'
+                + '</div>'
+                + '<div style="padding: 28px 32px;">'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 0 0 14px;">Hi ' + escapeHtml(appointment.userName) + ',</p>'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 0 0 14px;">Great news! Your appointment for your <strong>'
                 + escapeHtml(appointment.vehicleYear) + ' ' + escapeHtml(appointment.vehicleMake) + ' ' + escapeHtml(appointment.vehicleModel)
-                + '</strong> has been <strong style="color: green;">approved</strong>.</p>'
-                + emailDropoff
-                + '<p style="font-family: Arial, sans-serif;">If you need to reschedule or have questions, give us a call at <strong>231-675-0723</strong>.</p>'
-                + '<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">'
-                + '<p style="font-family: Arial, sans-serif; color: #888; font-size: 12px;">Boris Enterprises<br>9890 Whitfield Rd, East Jordan, MI 49727<br>231-675-0723</p>'
+                + '</strong> has been <strong style="color: #2e7d32;">approved</strong>.</p>'
+                + '<div style="background: #f8f8f8; border-left: 3px solid #CC1A1A; padding: 12px 16px; margin: 18px 0;">' + emailDropoff + '</div>'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 14px 0 0;">If you need to reschedule or have questions, give us a call at <strong>231-675-0723</strong>.</p>'
+                + '</div>'
+                + '<div style="border-top: 1px solid #e5e5e5; padding: 18px 32px; text-align: center;">'
+                + '<p style="color: #999; font-size: 11px; margin: 0; line-height: 1.6;">Boris Enterprises &nbsp;&bull;&nbsp; 9890 Whitfield Rd, East Jordan, MI 49727 &nbsp;&bull;&nbsp; 231-675-0723</p>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
             }
           });
         } catch (emailError) {
@@ -742,7 +825,8 @@
 
   // --- Deny Appointment ---
   window.denyAppointment = function(appointmentId) {
-    db.collection('appointments').doc(appointmentId).update({
+    var collectionName = getApptCollection(appointmentId);
+    db.collection(collectionName).doc(appointmentId).update({
       status: 'denied',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function() {
@@ -765,14 +849,26 @@
             to: appointment.userEmail,
             message: {
               subject: 'Appointment Update — Boris Enterprises',
-              html: '<h2 style="color: #CC1A1A; font-family: Arial, sans-serif;">Boris Enterprises</h2>'
-                + '<p style="font-family: Arial, sans-serif;">Hi ' + escapeHtml(appointment.userName) + ',</p>'
-                + '<p style="font-family: Arial, sans-serif;">Unfortunately, we are unable to accommodate your requested appointment for your <strong>'
+              html: '<div style="background-color: #f2f2f2; padding: 24px 0; font-family: Arial, Helvetica, sans-serif;">'
+                + '<div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">'
+                + '<div style="padding: 24px 0 16px; text-align: center;">'
+                + '<img src="https://borisenterprises.com/assets/logo.png" alt="Boris Enterprises" style="width: 160px; display: block; margin: 0 auto;" />'
+                + '</div>'
+                + '<div style="background-color: #CC1A1A; padding: 10px 0; text-align: center;">'
+                + '<p style="margin: 0; color: #ffffff; font-size: 13px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Appointment Update</p>'
+                + '</div>'
+                + '<div style="padding: 28px 32px;">'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 0 0 14px;">Hi ' + escapeHtml(appointment.userName) + ',</p>'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 0 0 14px;">Unfortunately, we are unable to accommodate your requested appointment for your <strong>'
                 + escapeHtml(appointment.vehicleYear) + ' ' + escapeHtml(appointment.vehicleMake) + ' ' + escapeHtml(appointment.vehicleModel)
                 + '</strong> at this time.</p>'
-                + '<p style="font-family: Arial, sans-serif;">Please give us a call at <strong>231-675-0723</strong> and we will find a time that works.</p>'
-                + '<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">'
-                + '<p style="font-family: Arial, sans-serif; color: #888; font-size: 12px;">Boris Enterprises<br>9890 Whitfield Rd, East Jordan, MI 49727<br>231-675-0723</p>'
+                + '<p style="font-size: 15px; color: #333; line-height: 1.6; margin: 14px 0 0;">Please give us a call at <strong>231-675-0723</strong> and we will find a time that works.</p>'
+                + '</div>'
+                + '<div style="border-top: 1px solid #e5e5e5; padding: 18px 32px; text-align: center;">'
+                + '<p style="color: #999; font-size: 11px; margin: 0; line-height: 1.6;">Boris Enterprises &nbsp;&bull;&nbsp; 9890 Whitfield Rd, East Jordan, MI 49727 &nbsp;&bull;&nbsp; 231-675-0723</p>'
+                + '</div>'
+                + '</div>'
+                + '</div>'
             }
           });
         } catch (emailError) {
@@ -872,11 +968,19 @@
       }
     }
 
-    // Replace action buttons — remove approve/deny, keep edit and delete
+    // Replace action buttons based on new status
     var actionsContainer = document.getElementById('appt-actions-' + appointmentId);
     if (actionsContainer) {
-      actionsContainer.innerHTML = '<button class="btn-edit" onclick="showEditForm(\'' + escapeHtml(appointmentId) + '\')">Edit</button>'
-        + '<button class="btn-delete" onclick="deleteAppointment(\'' + escapeHtml(appointmentId) + '\')">Delete</button>';
+      var btns = '';
+      if (newStatus === 'pending') {
+        btns += '<button class="btn-approve" onclick="showApprovalForm(\'' + escapeHtml(appointmentId) + '\')">Approve</button>';
+        btns += '<button class="btn-deny" onclick="showDenyConfirm(\'' + escapeHtml(appointmentId) + '\')">Deny</button>';
+      } else {
+        btns += '<button class="btn-approve" onclick="reopenAppointment(\'' + escapeHtml(appointmentId) + '\')" style="background:#FF8F00;">Reopen</button>';
+      }
+      btns += '<button class="btn-edit" onclick="showEditForm(\'' + escapeHtml(appointmentId) + '\')">Edit</button>';
+      btns += '<button class="btn-delete" onclick="deleteAppointment(\'' + escapeHtml(appointmentId) + '\')">Delete</button>';
+      actionsContainer.innerHTML = btns;
     }
 
     // If current filter doesn't match new status, re-render
@@ -890,7 +994,8 @@
     if (!confirm('Are you sure you want to delete this appointment? This cannot be undone.')) {
       return;
     }
-    db.collection('appointments').doc(appointmentId).delete().then(function() {
+    var collectionName = getApptCollection(appointmentId);
+    db.collection(collectionName).doc(appointmentId).delete().then(function() {
       // Remove from local array
       for (var i = 0; i < allAppointments.length; i++) {
         if (allAppointments[i]._id === appointmentId) {
@@ -1012,7 +1117,8 @@
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    db.collection('appointments').doc(appointmentId).update(data).then(function() {
+    var collectionName = getApptCollection(appointmentId);
+    db.collection(collectionName).doc(appointmentId).update(data).then(function() {
       // Update local array
       for (var i = 0; i < allAppointments.length; i++) {
         if (allAppointments[i]._id === appointmentId) {
