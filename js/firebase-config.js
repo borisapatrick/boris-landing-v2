@@ -3,7 +3,7 @@
 
 const firebaseConfig = {
   apiKey: "AIzaSyAnxm5FSWOMDRSUrV4EhqYTahGggEmf7aE",
-  authDomain: "boris-enterprises.firebaseapp.com",
+  authDomain: "borisenterprises.com",
   projectId: "boris-enterprises",
   storageBucket: "boris-enterprises.firebasestorage.app",
   messagingSenderId: "783560275501",
